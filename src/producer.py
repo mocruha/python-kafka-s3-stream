@@ -1,15 +1,17 @@
 import datetime
-import subprocess
 import json
+import os
+import subprocess
 from time import sleep
 
 from confluent_kafka import Producer
 
-# Constants
-BROKER = 'localhost:9094'
-TOPIC = 'cpu_data'
-CMD = ['mpstat', '-o', 'JSON']  # Bash command for data generation
-SLEEP_INTERVAL = 1  # Time interval between data collection (in seconds)
+# Configuracao: variaveis de ambiente com default de desenvolvimento, para o
+# quickstart funcionar sem .env (veja .env.example).
+BROKER = os.getenv('KAFKA_BOOTSTRAP', 'localhost:9094')
+TOPIC = os.getenv('KAFKA_TOPIC', 'cpu_data')
+SLEEP_INTERVAL = float(os.getenv('SAMPLE_INTERVAL', '1'))
+CMD = ['mpstat', '-o', 'JSON']  # comando de coleta
 
 
 def get_data(cmd: list) -> str:
@@ -51,34 +53,28 @@ def produce_messages():
     """
     Continuously collect CPU data and produce messages to Kafka.
     """
-    # Producer configuration
     producer_config = {
         'bootstrap.servers': BROKER,
         'security.protocol': 'PLAINTEXT'
     }
 
-    # Create Kafka producer
     producer = Producer(producer_config)
 
     while True:
-        # Collect CPU data
         data = get_data(CMD)
         if not data:
             print("No data received. Skipping this iteration.")
             sleep(SLEEP_INTERVAL)
             continue
 
-        # Encode data to JSON and produce Kafka message
-
         key = datetime.datetime.now().strftime('%Y-%m-%d_%H:%M:%S').encode('utf-8')
         try:
             value = json.dumps(data, ensure_ascii=False).encode('utf-8')
             producer.produce(TOPIC, key=key, value=value, callback=delivery_report)
-            producer.flush()  # Ensure the message is sent
+            producer.flush()
         except Exception as e:
             print(f"Error producing message: {e}")
 
-        # Wait before the next iteration
         sleep(SLEEP_INTERVAL)
 
 
