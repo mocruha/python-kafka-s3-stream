@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Ambiente local
+.env
+
+# Regras locais de agente (não versionadas)
+.clinerules/
