@@ -67,9 +67,21 @@ def produce_messages():
             sleep(SLEEP_INTERVAL)
             continue
 
+        # mpstat e entrada externa: valida na borda e pula a iteracao se o
+        # conteudo nao for JSON, em vez de publicar lixo no topico.
+        try:
+            json.loads(data)
+        except json.JSONDecodeError as e:
+            print(f"Malformed JSON from {CMD[0]}: {e}. Skipping this iteration.")
+            sleep(SLEEP_INTERVAL)
+            continue
+
         key = datetime.datetime.now().strftime('%Y-%m-%d_%H:%M:%S').encode('utf-8')
         try:
-            value = json.dumps(data, ensure_ascii=False).encode('utf-8')
+            # O stdout do mpstat ja e JSON. json.dumps() sobre essa string gravava
+            # uma string escapada dentro do objeto: o bucket recebia
+            # "{\"sysstat\"...}" em vez do JSON de verdade.
+            value = data.encode('utf-8')
             producer.produce(TOPIC, key=key, value=value, callback=delivery_report)
             producer.flush()
         except Exception as e:
