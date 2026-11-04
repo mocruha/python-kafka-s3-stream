@@ -72,7 +72,7 @@ def minio_put_message(minio_cli: Minio, message: bytes, name: str) -> None:
     """
     minio_cli.put_object(
         bucket_name=MINIO_BUCKET,
-        object_name=f'cpu_data_{name}',
+        object_name=f'cpu_{name}.json',
         data=io.BytesIO(message),
         length=len(message),
         content_type='application/json'

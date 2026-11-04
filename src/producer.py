@@ -35,6 +35,16 @@ def get_data(cmd: list) -> str:
         return ""
 
 
+def sample_key(now: datetime.datetime) -> bytes:
+    """Key da mensagem: o instante da amostra em UTC, em formato seguro para S3.
+
+    E o mesmo valor que nomeia o objeto no bucket, entao reprocessar uma
+    mensagem sobrescreve o mesmo objeto em vez de duplicar (idempotencia).
+    Sem ':' nem espaco: ':' e invalido para muitos consumidores de S3.
+    """
+    return now.strftime('%Y-%m-%dT%H-%M-%SZ').encode('utf-8')
+
+
 def delivery_report(err, msg):
     """
     Callback function to handle delivery reports for Kafka messages.
@@ -46,7 +56,7 @@ def delivery_report(err, msg):
     if err is not None:
         print(f"Delivery failed: {err}")
     else:
-        print(f"Message delivered to {msg.topic()} key=[cpu_data_{msg.key().decode()}]")
+        print(f"Message delivered to {msg.topic()} object=cpu_{msg.key().decode()}.json")
 
 
 def produce_messages():
@@ -76,7 +86,7 @@ def produce_messages():
             sleep(SLEEP_INTERVAL)
             continue
 
-        key = datetime.datetime.now().strftime('%Y-%m-%d_%H:%M:%S').encode('utf-8')
+        key = sample_key(datetime.datetime.now(datetime.timezone.utc))
         try:
             # O stdout do mpstat ja e JSON. json.dumps() sobre essa string gravava
             # uma string escapada dentro do objeto: o bucket recebia
