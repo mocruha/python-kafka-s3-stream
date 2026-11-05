@@ -1,21 +1,19 @@
-.PHONY: 
-
-all: prod_py cons_py
+.PHONY: up down produce consume logs bash
 
 up:
 	docker compose up -d
 
-prod_py:
+down:
+	docker compose down
+
+produce:
 	python3 src/producer.py
 
-cons_py:
+consume:
 	python3 src/consumer.py
+
+logs:
+	docker compose logs -f
 
 bash:
 	docker compose exec -it kafka bash
-
-redo_py:
-	rm cpu_data.json
-
-down:
-	docker compose down

@@ -1,6 +1,9 @@
 services:
   kafka:
-    image: 'bitnami/kafka:latest'
+    # bitnamilegacy: repositório onde as imagens Bitnami foram congeladas em
+    # ago/2025 (bitnami/kafka:latest deixou de existir). Tag fixa por escolha:
+    # `latest` torna o quickstart dependente do que o registry tiver no dia.
+    image: 'bitnamilegacy/kafka:4.0.0-debian-12-r10'
     container_name: kafka
     ports:
       - '9092:9092'    # PLAINTEXT listener (broker)
@@ -16,15 +19,25 @@ services:
       - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
       - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
       - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+    healthcheck:
+      # O broker leva alguns segundos para aceitar conexões; sem isso o
+      # producer falha se for iniciado junto com o `up`.
+      test: ['CMD-SHELL', 'kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
   minio:
-    image: bitnami/minio:latest
+    image: 'bitnamilegacy/minio:2025.7.23-debian-12-r5'
     container_name: minio
     ports:
       - '9000:9000'
       - '9001:9001'
     environment:
-      - MINIO_ROOT_USER=alcantara
-      - MINIO_ROOT_PASSWORD=senhasegura
-      - MINIO_DEFAULT_BUCKETS=baldinho
+      # Credenciais de desenvolvimento. Sobrescreva com .env (veja .env.example).
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - MINIO_DEFAULT_BUCKETS=${MINIO_BUCKET:-baldinho}
 
   
