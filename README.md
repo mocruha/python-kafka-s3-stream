@@ -136,6 +136,3 @@ Copie `.env.example` para `.env` se quiser sobrescrever algum valor.
 - [ ] Kafka sem volume persistente: `make down` zera os offsets
 - [ ] Um objeto por segundo gera muitos arquivos pequenos — agrupar em janelas de
       5 minutos e gravar Parquet reduziria custo de listagem
-- [ ] Particionamento Hive (`dt=AAAA-MM-DD/`) para consulta com Athena
-- [ ] Testes automatizados do sampler e do sink
-- [ ] CI (lint + testes) no GitHub Actions
