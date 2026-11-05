@@ -1,15 +1,17 @@
 import datetime
-import subprocess
 import json
+import os
+import subprocess
 from time import sleep
 
 from confluent_kafka import Producer
 
-# Constants
-BROKER = 'localhost:9094'
-TOPIC = 'cpu_data'
-CMD = ['mpstat', '-o', 'JSON']  # Bash command for data generation
-SLEEP_INTERVAL = 1  # Time interval between data collection (in seconds)
+# Configuracao: variaveis de ambiente com default de desenvolvimento, para o
+# quickstart funcionar sem .env (veja .env.example).
+BROKER = os.getenv('KAFKA_BOOTSTRAP', 'localhost:9094')
+TOPIC = os.getenv('KAFKA_TOPIC', 'cpu_data')
+SLEEP_INTERVAL = float(os.getenv('SAMPLE_INTERVAL', '1'))
+CMD = ['mpstat', '-o', 'JSON']  # comando de coleta
 
 
 def get_data(cmd: list) -> str:
@@ -33,6 +35,16 @@ def get_data(cmd: list) -> str:
         return ""
 
 
+def sample_key(now: datetime.datetime) -> bytes:
+    """Key da mensagem: o instante da amostra em UTC, em formato seguro para S3.
+
+    E o mesmo valor que nomeia o objeto no bucket, entao reprocessar uma
+    mensagem sobrescreve o mesmo objeto em vez de duplicar (idempotencia).
+    Sem ':' nem espaco: ':' e invalido para muitos consumidores de S3.
+    """
+    return now.strftime('%Y-%m-%dT%H-%M-%SZ').encode('utf-8')
+
+
 def delivery_report(err, msg):
     """
     Callback function to handle delivery reports for Kafka messages.
@@ -44,41 +56,47 @@ def delivery_report(err, msg):
     if err is not None:
         print(f"Delivery failed: {err}")
     else:
-        print(f"Message delivered to {msg.topic()} key=[cpu_data_{msg.key().decode()}]")
+        print(f"Message delivered to {msg.topic()} object=cpu_{msg.key().decode()}.json")
 
 
 def produce_messages():
     """
     Continuously collect CPU data and produce messages to Kafka.
     """
-    # Producer configuration
     producer_config = {
         'bootstrap.servers': BROKER,
         'security.protocol': 'PLAINTEXT'
     }
 
-    # Create Kafka producer
     producer = Producer(producer_config)
 
     while True:
-        # Collect CPU data
         data = get_data(CMD)
         if not data:
             print("No data received. Skipping this iteration.")
             sleep(SLEEP_INTERVAL)
             continue
 
-        # Encode data to JSON and produce Kafka message
-
-        key = datetime.datetime.now().strftime('%Y-%m-%d_%H:%M:%S').encode('utf-8')
+        # mpstat e entrada externa: valida na borda e pula a iteracao se o
+        # conteudo nao for JSON, em vez de publicar lixo no topico.
         try:
-            value = json.dumps(data, ensure_ascii=False).encode('utf-8')
+            json.loads(data)
+        except json.JSONDecodeError as e:
+            print(f"Malformed JSON from {CMD[0]}: {e}. Skipping this iteration.")
+            sleep(SLEEP_INTERVAL)
+            continue
+
+        key = sample_key(datetime.datetime.now(datetime.timezone.utc))
+        try:
+            # O stdout do mpstat ja e JSON. json.dumps() sobre essa string gravava
+            # uma string escapada dentro do objeto: o bucket recebia
+            # "{\"sysstat\"...}" em vez do JSON de verdade.
+            value = data.encode('utf-8')
             producer.produce(TOPIC, key=key, value=value, callback=delivery_report)
-            producer.flush()  # Ensure the message is sent
+            producer.flush()
         except Exception as e:
             print(f"Error producing message: {e}")
 
-        # Wait before the next iteration
         sleep(SLEEP_INTERVAL)
 
 
